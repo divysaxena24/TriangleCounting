@@ -1,0 +1,20 @@
+
+Graph Generator Parameters
+
+**************************
+n			: 5000
+m 			: 50000
+a			: 0.450000
+b			: 0.150000
+c                       : 0.150000
+d                       : 0.250000
+SELF_LOOPS		: 0
+MAX_WEIGHT		: 100
+MIN_WEIGHT		: 0
+STORE_IN_MEMORY		: 1
+WRITE_TO_FILE		: 1
+SORT_EDGELISTS		: 1
+SORT_TYPE	        : 0
+OUTFILE			: graph.txt
+LOGFILE			: log
+
