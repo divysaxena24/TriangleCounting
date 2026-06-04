@@ -60,7 +60,19 @@ The `countTriangles(int r)` method in `Graph.cpp`:
 
 - **C++17** compatible compiler (tested with g++ and MSVC)
 - **GTgraph R-MAT binary** (pre-built Windows binary included at `GTgraph/R-MAT/GTgraph-rmat.exe`)
-  - On Linux/macOS, you'll need to compile the GTgraph R-MAT generator from source
+  - On Linux/macOS, you'll need to compile the GTgraph R-MAT generator from source (see below)
+
+### Building GTgraph from Source (Linux/macOS)
+
+Clone and build the GTgraph repository:
+
+```bash
+git clone https://github.com/Bader-Research/GTgraph.git
+cd GTgraph
+make
+```
+
+After building, copy the relevant generator binaries (e.g., `GTgraph-R-MAT`) into the `GTgraph/R-MAT/` directory (or adjust the paths in `main.cpp` accordingly).
 
 ## Building & Running
 
@@ -73,9 +85,8 @@ triangle_count.exe
 
 ### Linux/macOS
 
-First, compile the GTgraph R-MAT generator for your platform, then:
-
 ```bash
+# Build GTgraph R-MAT generator first (see Prerequisites above)
 g++ -std=c++17 -O2 main.cpp Graph.cpp -o triangle_count
 ./triangle_count
 ```
