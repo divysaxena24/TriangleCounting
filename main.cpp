@@ -32,6 +32,9 @@ int main()
 #endif
 
     cout << "\nGenerating graph using GTgraph...\n";
+    cout << "\nDEBUG V = " << V << endl;
+cout << "DEBUG E = " << E << endl;
+cout << "COMMAND = " << command << endl;
 
     int status = system(command.c_str());
 
@@ -57,17 +60,11 @@ int main()
          << g.getVertices()
          << endl;
 
-    int r = max(1, (int)sqrt(V));
-
-    cout << "Random BFS Samples = "
-         << r
-         << endl;
 
     auto start =
         chrono::high_resolution_clock::now();
 
-    int triangles =
-        g.countTriangles(r);
+    long long triangles = g.countTriangles();
 
     auto end =
         chrono::high_resolution_clock::now();

@@ -1,7 +1,8 @@
 #ifndef GRAPH_H
 #define GRAPH_H
 
-#include <bits/stdc++.h>
+#include <vector>
+
 using namespace std;
 
 class Graph
@@ -21,7 +22,5 @@ public:
 
     long long countTriangles();
 };
-
-Graph createGraphFromFile(string filename);
 
 #endif

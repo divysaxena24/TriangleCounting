@@ -47,141 +47,117 @@ vector<int> Graph::bfsLevels(int src)
 int Graph::countTriangles(int r)
 {
     vector<pair<int, int>> edges;
+    edges.reserve(256);
 
-    map<pair<int, int>, int> edgeId;
+    auto pack = [](int a, int b) -> long long {
+        return ((long long)a << 32) | (unsigned int)b;
+    };
+
+    unordered_map<long long, int> edgeId;
+    edgeId.reserve(1024);
 
     int id = 0;
+    long long msum = 0;
+    for (int u = 0; u < V; ++u) msum += adj[u].size();
+    edges.reserve(msum / 2 + 4);
 
-    for (int u = 0; u < V; u++)
+    for (int u = 0; u < V; ++u)
     {
         for (int v : adj[u])
         {
             if (u < v)
             {
-                edges.push_back({u, v});
-                edgeId[{u, v}] = id++;
+                edges.emplace_back(u, v);
+                edgeId[pack(u, v)] = id++;
             }
         }
     }
 
-    vector<int> cnt(id, 0);
-
+    vector<int> cnt(id);
+    if (id > 0) cnt.assign(id, 0);
     random_device rd;
     mt19937 gen(rd());
-
     uniform_int_distribution<> dist(0, V - 1);
 
-    for (int i = 0; i < r; i++)
+    for (int i = 0; i < r; ++i)
     {
         int src = dist(gen);
-
         vector<int> level = bfsLevels(src);
 
-        for (int u = 0; u < V; u++)
+        for (int u = 0; u < V; ++u)
         {
             for (int v : adj[u])
             {
-                if (u < v &&
-                    level[u] != -1 &&
-                    level[v] != -1 &&
-                    level[u] == level[v])
+                if (u < v && level[u] != -1 && level[v] != -1 && level[u] == level[v])
                 {
-                    int idx = edgeId[{u, v}];
-                    cnt[idx]++;
+                    long long key = pack(u,v);
+                    auto it = edgeId.find(key);
+                    if (it != edgeId.end()) cnt[it->second]++;
                 }
             }
         }
     }
-    
 
-    cout << "\nHorizontal Edges:\n";
-
-    vector<pair<int, int>> horizontalEdges;
-
-    int threshold = ceil(r / 3.0);
-
-    for (int i = 0; i < edges.size(); i++)
-    {
-        if (cnt[i] >= threshold)
-        {
-            horizontalEdges.push_back(edges[i]);
-
-            cout << "("
-                 << edges[i].first
-                 << ", "
-                 << edges[i].second
-                 << ") count = "
-                 << cnt[i]
-                 << '\n';
-        }
-    }
+    vector<pair<int,int>> horizontalEdges;
+    horizontalEdges.reserve(edges.size());
+    int threshold = (int)ceil(r / 3.0);
+    for (int i = 0; i < (int)edges.size(); ++i)
+        if (cnt[i] >= threshold) horizontalEdges.push_back(edges[i]);
 
     vector<unordered_set<int>> adjSet(V);
-
-    for (int u = 0; u < V; u++)
+    for (int u = 0; u < V; ++u)
     {
-        for (int v : adj[u])
-        {
-            adjSet[u].insert(v);
-        }
+        adjSet[u].reserve(adj[u].size());
+        for (int v : adj[u]) adjSet[u].insert(v);
     }
 
-    set<tuple<int, int, int>> triangles;
+    struct TripleHash { size_t operator()(const tuple<int,int,int>& t) const noexcept {
+            auto [a,b,c] = t;
+            uint64_t h = (uint64_t)a;
+            h = h * 1000003u + (uint64_t)b;
+            h = h * 1000003u + (uint64_t)c;
+            return (size_t)h;
+        }
+    };
 
-    for (auto edge : horizontalEdges)
+    unordered_set<tuple<int,int,int>, TripleHash> triangles;
+    triangles.reserve(horizontalEdges.size() * 4 + 16);
+
+    for (auto &edge : horizontalEdges)
     {
         int u = edge.first;
         int v = edge.second;
-
-        for (int x : adj[u])
+        if (adj[u].size() > adj[v].size()) swap(u,v);
+        for (int w : adj[u])
         {
-            if (adjSet[v].count(x))
-            {
-                vector<int> t = {u, v, x};
-
-                sort(t.begin(), t.end());
-
-                triangles.insert({
-                    t[0],
-                    t[1],
-                    t[2]
-                });
-            }
+            if (!adjSet[v].count(w)) continue;
+            int a = u, b = v, c = w;
+            if (a > b) swap(a,b);
+            if (b > c) swap(b,c);
+            if (a > b) swap(a,b);
+            triangles.emplace(a,b,c);
         }
     }
-cout << "\nShowing first 20 triangles:\n";
 
-int shown = 0;
-
-for (auto tri : triangles){
-    if (shown == 20)
-        break;
-
-    auto [a, b, c] = tri;
-
-    cout << "("
-         << a << ", "
-         << b << ", "
-         << c << ")\n";
-
-    shown++;
-}
-
-return triangles.size();
+    return (int)triangles.size();
 }
 
 Graph createGraphFromFile(string filename)
 {
     ifstream file(filename);
-
     if (!file)
     {
         cout << "Cannot open file!\n";
         exit(1);
     }
 
-    vector<pair<int, int>> edges;
+    auto edgeKey = [](int u, int v)
+    {
+        if (u > v) swap(u,v);
+        return ((long long)u << 32) | (unsigned int)v;
+    };
 
+    unordered_set<long long> uniqueEdges;
     string type;
     int u, v, w;
     int maxVertex = -1;
@@ -190,21 +166,13 @@ Graph createGraphFromFile(string filename)
     {
         if (type == "a")
         {
-            file >> u >> v >> w;
-
-            // Convert 1-based indexing to 0-based
-            u--;
-            v--;
-
-            edges.push_back({u, v});
-
-            maxVertex = max(maxVertex, max(u, v));
+            if (!(file >> u >> v >> w)) break;
+            u--; v--;
+            if (u < 0 || v < 0 || u == v) continue;
+            uniqueEdges.insert(edgeKey(u,v));
+            maxVertex = max(maxVertex, max(u,v));
         }
-        else
-        {
-            string dummy;
-            getline(file, dummy);
-        }
+        else { string dummy; getline(file,dummy); }
     }
 
     if (maxVertex == -1)
@@ -214,10 +182,11 @@ Graph createGraphFromFile(string filename)
     }
 
     Graph g(maxVertex + 1);
-
-    for (auto edge : edges)
+    for (auto key : uniqueEdges)
     {
-        g.addEdge(edge.first, edge.second);
+        int a = (int)(key >> 32);
+        int b = (int)key;
+        g.addEdge(a,b);
     }
 
     return g;
