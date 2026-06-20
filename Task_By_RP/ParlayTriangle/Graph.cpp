@@ -1,28 +1,55 @@
-#include "Graph.h"
-#include <random>
+#include <parlay/sequence.h>
 #include <parlay/parallel.h>
-
+#include <map>
+#include <string>
 #include <iostream>
 #include <fstream>
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
-#include <cmath>
+#include <random>
 #include <atomic>
-#include <algorithm>
+#include <cmath>
 
 using namespace std;
 
+class Graph {
+private:
+    size_t V;
+    parlay::sequence<parlay::sequence<int>> adj;
+
+public:
+    long long lastCoverSetSize = 0;
+
+public:
+    Graph(size_t n);
+
+    void addEdge(int u, int v);
+
+    size_t getVertices() const;
+
+    vector<int> bfsLevels(int src);
+
+    long long countTriangles(int r);
+
+    friend Graph createGraphFromFile(const string& filename);
+};
+
 Graph::Graph(size_t n)
+    : V(n), adj(n)
 {
-    V = n;
-    adj.resize(n);
 }
 
 void Graph::addEdge(int u, int v)
 {
-    adj[u].push_back(v);
-    adj[v].push_back(u);
+    auto nu = adj[u].size();
+    auto nv = adj[v].size();
+
+    adj[u].resize(nu + 1);
+    adj[v].resize(nv + 1);
+
+    adj[u][nu] = v;
+    adj[v][nv] = u;
 }
 
 size_t Graph::getVertices() const
@@ -68,15 +95,9 @@ long long Graph::countTriangles(int r)
                (unsigned int)b;
     };
 
-    //--------------------------------------------------
-    // Build edge list and Φ
-    //--------------------------------------------------
+    vector<pair<int,int>> edges;
 
-    vector<pair<int, int>> edges;
-    edges.reserve(100000);
-
-    unordered_map<long long, int> edgeId;
-    edgeId.reserve(200000);
+    unordered_map<long long,int> edgeId;
 
     int id = 0;
 
@@ -87,7 +108,7 @@ long long Graph::countTriangles(int r)
             if ((int)u < v)
             {
                 edges.push_back({(int)u, v});
-                edgeId[pack((int)u, v)] = id++;
+                edgeId[pack((int)u,v)] = id++;
             }
         }
     }
@@ -96,18 +117,17 @@ long long Graph::countTriangles(int r)
          << edges.size()
          << endl;
 
-    //--------------------------------------------------
-    // Horizontal Edge Counting
-    //--------------------------------------------------
+    vector<int> horizontalCount(
+        edges.size(), 0);
 
-    vector<int> horizontalCount(edges.size(), 0);
-
-    mt19937 gen(42);   // fixed seed => reproducible experiments
+    mt19937 gen(42);
 
     uniform_int_distribution<>
         dist(0, (int)V - 1);
 
-    for (int iter = 0; iter < r; iter++)
+    for (int iter = 0;
+         iter < r;
+         iter++)
     {
         int src = dist(gen);
 
@@ -115,14 +135,11 @@ long long Graph::countTriangles(int r)
             bfsLevels(src);
 
         for (size_t e = 0;
-            e < edges.size();
-            e++)
+             e < edges.size();
+             e++)
         {
-            int u =
-                edges[e].first;
-
-            int v =
-                edges[e].second;
+            int u = edges[e].first;
+            int v = edges[e].second;
 
             if (level[u] != -1 &&
                 level[v] != -1 &&
@@ -133,40 +150,59 @@ long long Graph::countTriangles(int r)
         }
     }
 
-    //--------------------------------------------------
-    // Cover Set
-    //--------------------------------------------------
-
     int threshold =
         (int)ceil(r / 3.0);
 
     unordered_set<long long>
         coverSet;
 
-    coverSet.reserve(
-        edges.size());
-
     for (size_t i = 0;
          i < edges.size();
          i++)
     {
-        if (horizontalCount[i]
-            >= threshold)
+        if (horizontalCount[i] >= threshold)
         {
             coverSet.insert(
-                pack(
-                    edges[i].first,
-                    edges[i].second));
+                pack(edges[i].first,
+                     edges[i].second));
         }
     }
 
-    cout << "Cover Set Size = "
-         << coverSet.size()
-         << endl;
+    lastCoverSetSize = coverSet.size();
 
-    //--------------------------------------------------
-    // Fast adjacency lookup
-    //--------------------------------------------------
+    cout << "Cover Set Size = "
+        << lastCoverSetSize
+        << endl;
+
+    /*
+        Save histogram:
+        x-axis = horizontal count
+        y-axis = number of edges
+    */
+
+    map<int,int> freq;
+
+    for(int cnt : horizontalCount)
+    {
+        freq[cnt]++;
+    }
+
+    string fileName =
+        "horizontal_data_r_" +
+        to_string(r) +
+        ".txt";
+
+    ofstream hout(fileName);
+
+    for(auto &p : freq)
+    {
+        hout << p.first
+            << " "
+            << p.second
+            << "\n";
+    }
+
+    hout.close();
 
     vector<unordered_set<int>>
         adjSet(V);
@@ -175,18 +211,11 @@ long long Graph::countTriangles(int r)
          u < V;
          u++)
     {
-        adjSet[u].reserve(
-            adj[u].size() * 2);
-
         for (int v : adj[u])
         {
             adjSet[u].insert(v);
         }
     }
-
-    //--------------------------------------------------
-    // Parallel Triangle Counting
-    //--------------------------------------------------
 
     atomic<long long> T(0);
 
@@ -195,14 +224,11 @@ long long Graph::countTriangles(int r)
         edges.size(),
         [&](size_t idx)
         {
-            int u =
-                edges[idx].first;
-
-            int v =
-                edges[idx].second;
+            int u = edges[idx].first;
+            int v = edges[idx].second;
 
             long long uv =
-                pack(u, v);
+                pack(u,v);
 
             if (!coverSet.count(uv))
                 return;
@@ -221,8 +247,7 @@ long long Graph::countTriangles(int r)
                 (small == u)
                 ? v : u;
 
-            for (int w :
-                 adj[small])
+            for (int w : adj[small])
             {
                 if (!adjSet[large]
                          .count(w))
@@ -230,14 +255,13 @@ long long Graph::countTriangles(int r)
                     continue;
                 }
 
-                bool isMaximum =
-                    true;
+                bool isMaximum = true;
 
                 long long uw =
-                    pack(u, w);
+                    pack(u,w);
 
                 long long vw =
-                    pack(v, w);
+                    pack(v,w);
 
                 auto it1 =
                     edgeId.find(uw);
@@ -245,11 +269,9 @@ long long Graph::countTriangles(int r)
                 if (it1 != edgeId.end())
                 {
                     if (coverSet.count(uw) &&
-                        it1->second >
-                        phi_uv)
+                        it1->second > phi_uv)
                     {
-                        isMaximum =
-                            false;
+                        isMaximum = false;
                     }
                 }
 
@@ -259,11 +281,9 @@ long long Graph::countTriangles(int r)
                 if (it2 != edgeId.end())
                 {
                     if (coverSet.count(vw) &&
-                        it2->second >
-                        phi_uv)
+                        it2->second > phi_uv)
                     {
-                        isMaximum =
-                            false;
+                        isMaximum = false;
                     }
                 }
 
@@ -288,8 +308,7 @@ Graph createGraphFromFile(
 
     if (!fin)
     {
-        cout
-            << "Cannot open file\n";
+        cout << "Cannot open file\n";
         exit(1);
     }
 
@@ -297,12 +316,12 @@ Graph createGraphFromFile(
 
     int maxVertex = -1;
 
-    vector<pair<int, int>>
+    vector<pair<int,int>>
         edges;
 
     while (fin >> u >> v)
     {
-        edges.push_back({u, v});
+        edges.push_back({u,v});
 
         maxVertex =
             max(maxVertex, u);

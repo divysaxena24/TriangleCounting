@@ -1,6 +1,8 @@
-#include "Graph.h"
+#include "Graph.cpp"
 
 #include <iostream>
+#include <fstream>
+#include <vector>
 #include <chrono>
 
 using namespace std;
@@ -8,43 +10,63 @@ using namespace std;
 int main()
 {
     Graph g =
-        createGraphFromFile(
-            "facebook.txt"
-        );
+        createGraphFromFile("email.txt");
 
-    cout
-        << "Vertices = "
-        << g.getVertices()
-        << endl;
+    cout << "Vertices = "
+         << g.getVertices()
+         << endl;
 
-    int r;
+    vector<int> rValues(64);
 
-    cout
-        << "Enter r: ";
+    cout << "\nEnter 64 values of r:\n";
 
-    cin >> r;
+    for(int i = 0; i < 64; i++)
+    {
+        cin >> rValues[i];
+    }
 
-    auto start =
-        chrono::high_resolution_clock::now();
+    ofstream fout("graph_data.txt");
 
-    long long triangles =
-        g.countTriangles(r);
+    for(int r : rValues)
+    {
+        cout << "\nRunning r = "
+             << r
+             << endl;
 
-    auto end =
-        chrono::high_resolution_clock::now();
+        auto start =
+            chrono::high_resolution_clock::now();
 
-    cout
-        << "\nTriangles = "
-        << triangles
-        << endl;
+        long long triangles =
+            g.countTriangles(r);
 
-    cout
-        << "Execution Time = "
-        << chrono::duration_cast
-           <chrono::milliseconds>
-           (end - start)
-           .count()
-        << " ms\n";
+        auto end =
+            chrono::high_resolution_clock::now();
+
+        long long timeMs =
+            chrono::duration_cast
+            <chrono::milliseconds>
+            (end - start)
+            .count();
+
+        cout << "Triangles = "
+             << triangles
+             << endl;
+
+        cout << "Time = "
+             << timeMs
+             << " ms\n";
+
+        fout << r
+             << " "
+             << g.lastCoverSetSize
+             << "\n";
+    }
+
+    fout.close();
+
+    cout << "\nGenerated:\n";
+    cout << "graph_data.txt\n";
+    cout << "horizontal_data_r_*.txt\n";
 
     return 0;
 }
