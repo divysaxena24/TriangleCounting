@@ -2,6 +2,7 @@
 #include <parlay/parallel.h>
 #include <map>
 #include <string>
+#include <sstream>
 #include <iostream>
 #include <fstream>
 #include <queue>
@@ -10,6 +11,7 @@
 #include <random>
 #include <atomic>
 #include <cmath>
+#include <climits>
 
 using namespace std;
 
@@ -118,55 +120,86 @@ long long Graph::countTriangles(int r)
          << endl;
 
     vector<int> horizontalCount(
-        edges.size(), 0);
+    edges.size(), 0);
+            
+    int minHorizontalEdges =
+        (r == 0 ? 0 : INT_MAX);
+
+    /*
+        Generate r distinct sources
+    */
 
     mt19937 gen(42);
 
-    uniform_int_distribution<>
-        dist(0, (int)V - 1);
+    vector<int> vertices(V);
 
-    for (int iter = 0;
-         iter < r;
-         iter++)
+    for(int i = 0; i < (int)V; i++)
     {
-        int src = dist(gen);
+        vertices[i] = i;
+    }
 
+    shuffle(
+        vertices.begin(),
+        vertices.end(),
+        gen);
+
+    r = min(r, (int)V);
+
+    vector<int> sources(
+        vertices.begin(),
+        vertices.begin() + r);
+
+    /*
+        Run BFS from each distinct source
+    */
+
+    for(int src : sources)
+    {
         vector<int> level =
             bfsLevels(src);
 
-        for (size_t e = 0;
-             e < edges.size();
-             e++)
+        int currentHorizontal = 0;
+
+        for(size_t e = 0;
+            e < edges.size();
+            e++)
         {
             int u = edges[e].first;
             int v = edges[e].second;
 
-            if (level[u] != -1 &&
-                level[v] != -1 &&
-                level[u] == level[v])
+            if(level[u] != -1 &&
+            level[v] != -1 &&
+            level[u] == level[v])
             {
                 horizontalCount[e]++;
+                currentHorizontal++;
             }
         }
+
+        minHorizontalEdges = min(minHorizontalEdges, currentHorizontal);
     }
 
-    int threshold =
-        (int)ceil(r / 3.0);
+    cout << "Distinct Sources = " << r << endl;
 
-    unordered_set<long long>
-        coverSet;
+    cout << "Minimum Horizontal Edges = " << minHorizontalEdges << endl;
 
-    for (size_t i = 0;
-         i < edges.size();
-         i++)
-    {
-        if (horizontalCount[i] >= threshold)
+        int threshold =
+            (int)ceil(r / 3.0);
+
+        unordered_set<long long>
+            coverSet;
+
+        for (size_t i = 0;
+            i < edges.size();
+            i++)
         {
-            coverSet.insert(
-                pack(edges[i].first,
-                     edges[i].second));
+            if (horizontalCount[i] >= threshold)
+            {
+                coverSet.insert(
+                    pack(edges[i].first,
+                        edges[i].second));
+            }
         }
-    }
 
     lastCoverSetSize = coverSet.size();
 
@@ -300,49 +333,88 @@ long long Graph::countTriangles(int r)
 
     return T.load();
 }
-
-Graph createGraphFromFile(
-    const string& filename)
+ 
+Graph createGraphFromFile(const string& filename)
 {
     ifstream fin(filename);
 
     if (!fin)
     {
-        cout << "Cannot open file\n";
+        cout << "Cannot open file: "
+             << filename
+             << endl;
         exit(1);
     }
 
-    int u, v;
+    string line;
 
-    int maxVertex = -1;
-
-    vector<pair<int,int>>
-        edges;
-
-    while (fin >> u >> v)
+    // Skip Matrix Market comments
+    while (getline(fin, line))
     {
-        edges.push_back({u,v});
+        if (!line.empty() &&
+            line[0] != '%')
+        {
+            break;
+        }
+    }
 
-        maxVertex =
-            max(maxVertex, u);
+    stringstream ss(line);
 
-        maxVertex =
-            max(maxVertex, v);
+    int rows, cols, nnz;
+
+    ss >> rows >> cols >> nnz;
+
+    Graph g(max(rows, cols));
+
+    auto pack = [](int a, int b)
+    {
+        if (a > b)
+            swap(a, b);
+
+        return ((long long)a << 32) |
+               (unsigned int)b;
+    };
+
+    unordered_set<long long> seenEdges;
+
+    long long duplicateEdges = 0;
+
+    int u, v;
+    double weight;
+
+    while (fin >> u >> v >> weight)
+    {
+        // MTX -> 0 based indexing
+        u--;
+        v--;
+
+        // Ignore self loops
+        if (u == v)
+            continue;
+
+        long long key = pack(u, v);
+
+        // Ignore duplicate edges
+        if (seenEdges.count(key))
+        {
+            duplicateEdges++;
+            continue;
+        }
+
+        seenEdges.insert(key);
+
+        g.addEdge(u, v);
     }
 
     fin.close();
 
-    Graph g(maxVertex + 1);
+    cout << "Unique Edges Loaded = "
+         << seenEdges.size()
+         << endl;
 
-    for (auto &e : edges)
-    {
-        if (e.first != e.second)
-        {
-            g.addEdge(
-                e.first,
-                e.second);
-        }
-    }
+    cout << "Duplicate Edges Skipped = "
+         << duplicateEdges
+         << endl;
 
     return g;
 }

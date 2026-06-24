@@ -10,17 +10,17 @@ using namespace std;
 int main()
 {
     Graph g =
-        createGraphFromFile("email.txt");
+        createGraphFromFile("Datasets/bcsstk32.mtx");
 
     cout << "Vertices = "
          << g.getVertices()
          << endl;
 
-    vector<int> rValues(64);
+    vector<int> rValues(5);
 
-    cout << "\nEnter 64 values of r:\n";
+    cout << "\nEnter 5 values of r:\n";
 
-    for(int i = 0; i < 64; i++)
+    for(int i = 0; i < 5; i++)
     {
         cin >> rValues[i];
     }
